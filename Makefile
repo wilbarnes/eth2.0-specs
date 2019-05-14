@@ -16,7 +16,7 @@ PY_SPEC_PHASE_0_TARGETS = $(PY_SPEC_DIR)/eth2spec/phase0/spec.py
 PY_SPEC_ALL_TARGETS = $(PY_SPEC_PHASE_0_TARGETS)
 
 
-.PHONY: clean all test citest gen_yaml_tests pyspec phase0 install_test
+.PHONY: clean all test citest gen_yaml_tests pyspec phase0 install_test install_lint lint install_notedown ipymd md2ipy
 
 all: $(PY_SPEC_ALL_TARGETS) $(YAML_TEST_DIR) $(YAML_TEST_TARGETS)
 
@@ -45,6 +45,25 @@ install_lint:
 lint:
 	cd $(PY_SPEC_DIR); . venv/bin/activate; \
 	flake8 --max-line-length=120 ./eth2spec;
+
+install_notedown:
+	python3 -m venv venv; . venv/bin/activate; pip3 install notedown==1.5.1 jupyter==1.0.0 jupyter_client==5.2.4 ipykernel==5.1.0
+
+note ?= specs/core/0_beacon-chain
+note_in ?= $(note)
+note_out ?= $(note)
+
+ipy2md:
+	. venv/bin/activate; \
+	notedown $(note_in).ipynb --to markdown --strip > $(note_out).md
+
+md2ipy:
+	. venv/bin/activate; \
+	notedown $(note_in).md > $(note_out).ipynb
+
+run_ipy:
+	. venv/bin/activate; \
+	notedown $(note_in).md --run > $(note_out).ipynb
 
 # "make pyspec" to create the pyspec for all phases.
 pyspec: $(PY_SPEC_ALL_TARGETS)
