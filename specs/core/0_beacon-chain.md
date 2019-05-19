@@ -1211,7 +1211,7 @@ def get_genesis_beacon_state(deposits: List[Deposit], genesis_time: int, genesis
 
 ### Genesis block
 
-Let `genesis_block = BeaconBlock(state_root=hash_tree_root(genesis_state))`.
+Let `genesis_block = BeaconBlock(parent_root=signing_root(BeaconBlock()), state_root=hash_tree_root(genesis_state))`.
 
 ## Beacon chain state transition function
 
