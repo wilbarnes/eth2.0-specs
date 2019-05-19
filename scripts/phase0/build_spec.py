@@ -73,6 +73,7 @@ def hash(x):
         return ret
 
 
+
 # Access to overwrite spec constants based on configuration
 def apply_constants_preset(preset: Dict[str, Any]):
     global_vars = globals()

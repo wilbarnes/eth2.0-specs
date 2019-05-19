@@ -314,15 +314,15 @@ def get_valid_attestation(state, slot=None):
     assert len(participants) == 2
 
     signatures = []
-    for validator_index in participants:
-        privkey = privkeys[validator_index]
-        signatures.append(
-            get_attestation_signature(
-                state,
-                attestation.data,
-                privkey
-            )
-        )
+    # for validator_index in participants:
+        # privkey = privkeys[validator_index]
+        # signatures.append(
+            # get_attestation_signature(
+                # state,
+                # attestation.data,
+                # privkey
+            # )
+        # )
 
     attestation.aggregation_signature = bls.aggregate_signatures(signatures)
     return attestation

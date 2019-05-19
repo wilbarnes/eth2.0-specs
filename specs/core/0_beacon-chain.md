@@ -1260,12 +1260,19 @@ def process_slot(state: BeaconState) -> None:
 
 ```python
 def process_epoch(state: BeaconState) -> None:
+    print("process_justification_and_finalization")
     process_justification_and_finalization(state)
+    print("process_crosslinks")
     process_crosslinks(state)
+    print("process_rewards_and_penalties")
     process_rewards_and_penalties(state)
+    print("process_registry_updates")
     process_registry_updates(state)
+    print("process_slashings")
     process_slashings(state)
+    print("process_final_updates")
     process_final_updates(state)
+    print("finish")
 ```
 
 #### Helper functions
@@ -1278,23 +1285,26 @@ def get_total_active_balance(state: BeaconState) -> Gwei:
 ```python
 def get_matching_source_attestations(state: BeaconState, epoch: Epoch) -> List[PendingAttestation]:
     assert epoch in (get_current_epoch(state), get_previous_epoch(state))
-    return state.current_epoch_attestations if epoch == get_current_epoch(state) else state.previous_epoch_attestations
+    current_epoch = get_current_epoch(state)
+    return frozenset(state.current_epoch_attestations if epoch == current_epoch else state.previous_epoch_attestations)
 ```
 
 ```python
 def get_matching_target_attestations(state: BeaconState, epoch: Epoch) -> List[PendingAttestation]:
-    return [
-        a for a in get_matching_source_attestations(state, epoch)
+    matching_source_attestations = get_matching_source_attestations(state, epoch)
+    return frozenset(
+        a for a in matching_source_attestations
         if a.data.target_root == get_block_root(state, epoch)
-    ]
+    )
 ```
 
 ```python
 def get_matching_head_attestations(state: BeaconState, epoch: Epoch) -> List[PendingAttestation]:
-    return [
-        a for a in get_matching_source_attestations(state, epoch)
+    matching_source_attestations = get_matching_source_attestations(state, epoch)
+    return frozenset(
+        a for a in matching_source_attestations
         if a.data.beacon_block_root == get_block_root_at_slot(state, get_attestation_data_slot(state, a.data))
-    ]
+    )
 ```
 
 ```python
@@ -1303,7 +1313,7 @@ def get_unslashed_attesting_indices(state: BeaconState,
     output = set()
     for a in attestations:
         output = output.union(get_attesting_indices(state, a.data, a.aggregation_bitfield))
-    return sorted(filter(lambda index: not state.validator_registry[index].slashed, list(output)))
+    return frozenset(filter(lambda index: not state.validator_registry[index].slashed, list(output)))
 ```
 
 ```python
@@ -1322,9 +1332,9 @@ def get_winning_crosslink_and_attesting_indices(state: BeaconState,
     ))
     # Winning crosslink has the crosslink data root with the most balance voting for it (ties broken lexicographically)
     winning_crosslink = max(crosslinks, key=lambda c: (
-        get_attesting_balance(state, [a for a in attestations if a.data.crosslink == c]), c.data_root
+        get_attesting_balance(state, frozenset(a for a in attestations if a.data.crosslink == c)), c.data_root
     ), default=Crosslink())
-    winning_attestations = [a for a in attestations if a.data.crosslink == winning_crosslink]
+    winning_attestations = frozenset(a for a in attestations if a.data.crosslink == winning_crosslink)
     return winning_crosslink, get_unslashed_attesting_indices(state, winning_attestations)
 ```
 
@@ -1576,10 +1586,12 @@ def process_final_updates(state: BeaconState) -> None:
 
 ```python
 def process_block(state: BeaconState, block: BeaconBlock) -> None:
+    print("start block")
     process_block_header(state, block)
     process_randao(state, block.body)
     process_eth1_data(state, block.body)
     process_operations(state, block.body)
+    print("finish block")
 ```
 
 #### Block header

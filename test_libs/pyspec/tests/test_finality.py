@@ -47,9 +47,11 @@ def check_finality(state,
 def next_epoch_with_attestations(state,
                                  fill_cur_epoch,
                                  fill_prev_epoch):
+    print("copying state")
     post_state = deepcopy(state)
     blocks = []
     for _ in range(spec.SLOTS_PER_EPOCH):
+        print("buildling block")
         block = build_empty_block_for_next_slot(post_state)
         if fill_cur_epoch:
             slot_to_attest = post_state.slot - spec.MIN_ATTESTATION_INCLUSION_DELAY + 1
@@ -64,6 +66,7 @@ def next_epoch_with_attestations(state,
             fill_aggregate_attestation(post_state, prev_attestation)
             block.body.attestations.append(prev_attestation)
 
+        print("built block")
         spec.state_transition(post_state, block)
         blocks.append(block)
 

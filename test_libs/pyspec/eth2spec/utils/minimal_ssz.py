@@ -10,6 +10,7 @@ ZERO_CHUNK = b'\x00' * BYTES_PER_CHUNK
 def SSZType(fields):
     class SSZObject():
         def __init__(self, **kwargs):
+            self.hash_tree_root_cache = None
             for f, t in fields.items():
                 if f not in kwargs:
                     setattr(self, f, get_zero_value(t))
@@ -28,11 +29,20 @@ def SSZType(fields):
                 output.append(f'{field}: {getattr(self, field)}')
             return "\n".join(output)
 
+        def __setattr__(self, key, value):
+            if key != 'hash_tree_root_cache':
+                self.hash_tree_root_cache = None
+            super().__setattr__(key, value)
+
         def serialize(self):
             return serialize_value(self, self.__class__)
 
         def hash_tree_root(self):
-            return hash_tree_root(self, self.__class__)
+            if self.hash_tree_root_cache:
+                return self.hash_tree_root_cache
+            ret = hash_tree_root(self, self.__class__)
+            self.hash_tree_root_cache = ret
+            return ret
 
     SSZObject.fields = fields
     return SSZObject
