@@ -7,7 +7,7 @@ from pathlib import Path
 from os.path import join
 
 
-def load_presets(configs_dir, presets_name) -> Dict[str, Any]:
+def load_presets(configs_dir, presets_name, fork_name='phase0') -> Dict[str, Any]:
     """
     Loads the given preset
     :param presets_name: The name of the generator. (lowercase snake_case)
@@ -16,8 +16,9 @@ def load_presets(configs_dir, presets_name) -> Dict[str, Any]:
     path = Path(join(configs_dir, 'constant_presets', presets_name+'.yaml'))
     yaml = YAML(typ='base')
     loaded = yaml.load(path)
+    per_fork_config = loaded[fork_name]
     out = dict()
-    for k, v in loaded.items():
+    for k, v in per_fork_config.items():
         if v.startswith("0x"):
             out[k] = bytes.fromhex(v[2:])
         else:

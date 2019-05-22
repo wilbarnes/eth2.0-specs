@@ -36,7 +36,7 @@ def set_bitfield_bit(bitfield, i):
     )
 
 
-def create_mock_genesis_validator_deposits(num_validators, deposit_data_leaves=None):
+def create_mock_genesis_validator_deposits(spec, num_validators, deposit_data_leaves=None):
     if not deposit_data_leaves:
         deposit_data_leaves = []
     signature = b'\x33' * 96
@@ -69,8 +69,9 @@ def create_mock_genesis_validator_deposits(num_validators, deposit_data_leaves=N
     return genesis_validator_deposits, root
 
 
-def create_genesis_state(num_validators, deposit_data_leaves=None):
+def create_genesis_state(spec, num_validators, deposit_data_leaves=None):
     initial_deposits, deposit_root = create_mock_genesis_validator_deposits(
+        spec,
         num_validators,
         deposit_data_leaves,
     )
@@ -85,7 +86,7 @@ def create_genesis_state(num_validators, deposit_data_leaves=None):
     )
 
 
-def build_empty_block_for_next_slot(state):
+def build_empty_block_for_next_slot(spec, state):
     empty_block = spec.BeaconBlock()
     empty_block.slot = state.slot + 1
     empty_block.body.eth1_data.deposit_count = state.deposit_index
@@ -96,7 +97,7 @@ def build_empty_block_for_next_slot(state):
     return empty_block
 
 
-def build_deposit_data(state, pubkey, privkey, amount):
+def build_deposit_data(spec, state, pubkey, privkey, amount):
     deposit_data = spec.DepositData(
         pubkey=pubkey,
         # insecurely use pubkey as withdrawal key as well
@@ -115,11 +116,11 @@ def build_deposit_data(state, pubkey, privkey, amount):
     return deposit_data
 
 
-def build_attestation_data(state, slot, shard):
+def build_attestation_data(spec, state, slot, shard):
     assert state.slot >= slot
 
     if slot == state.slot:
-        block_root = build_empty_block_for_next_slot(state).parent_root
+        block_root = build_empty_block_for_next_slot(spec, state).parent_root
     else:
         block_root = spec.get_block_root_at_slot(state, slot)
 
@@ -159,7 +160,7 @@ def build_attestation_data(state, slot, shard):
     )
 
 
-def build_voluntary_exit(state, epoch, validator_index, privkey):
+def build_voluntary_exit(spec, state, epoch, validator_index, privkey):
     voluntary_exit = spec.VoluntaryExit(
         epoch=epoch,
         validator_index=validator_index,
@@ -177,12 +178,13 @@ def build_voluntary_exit(state, epoch, validator_index, privkey):
     return voluntary_exit
 
 
-def build_deposit(state,
+def build_deposit(spec,
+                  state,
                   deposit_data_leaves,
                   pubkey,
                   privkey,
                   amount):
-    deposit_data = build_deposit_data(state, pubkey, privkey, amount)
+    deposit_data = build_deposit_data(spec, state, pubkey, privkey, amount)
 
     item = deposit_data.hash_tree_root()
     index = len(deposit_data_leaves)
@@ -201,7 +203,7 @@ def build_deposit(state,
     return deposit, root, deposit_data_leaves
 
 
-def get_valid_proposer_slashing(state):
+def get_valid_proposer_slashing(spec, state):
     current_epoch = spec.get_current_epoch(state)
     validator_index = spec.get_active_validator_indices(state, current_epoch)[-1]
     privkey = pubkey_to_privkey[state.validator_registry[validator_index].pubkey]
@@ -239,8 +241,8 @@ def get_valid_proposer_slashing(state):
     )
 
 
-def get_valid_attester_slashing(state):
-    attestation_1 = get_valid_attestation(state)
+def get_valid_attester_slashing(spec, state):
+    attestation_1 = get_valid_attestation(spec, state)
     attestation_2 = deepcopy(attestation_1)
     attestation_2.data.target_root = b'\x01' * 32
 
@@ -250,7 +252,7 @@ def get_valid_attester_slashing(state):
     )
 
 
-def get_valid_attestation(state, slot=None):
+def get_valid_attestation(spec, state, slot=None):
     if slot is None:
         slot = state.slot
 
@@ -260,7 +262,7 @@ def get_valid_attestation(state, slot=None):
         previous_shard_delta = spec.get_shard_delta(state, spec.get_previous_epoch(state))
         shard = (state.latest_start_shard - previous_shard_delta + slot) % spec.SHARD_COUNT
 
-    attestation_data = build_attestation_data(state, slot, shard)
+    attestation_data = build_attestation_data(spec, state, slot, shard)
 
     crosslink_committee = spec.get_crosslink_committee(
         state,
@@ -289,6 +291,7 @@ def get_valid_attestation(state, slot=None):
         privkey = privkeys[validator_index]
         signatures.append(
             get_attestation_signature(
+                spec,
                 state,
                 attestation.data,
                 privkey
@@ -299,7 +302,7 @@ def get_valid_attestation(state, slot=None):
     return attestation
 
 
-def get_valid_transfer(state, slot=None, sender_index=None, amount=None, fee=None):
+def get_valid_transfer(spec, state, slot=None, sender_index=None, amount=None, fee=None):
     if slot is None:
         slot = state.slot
     current_epoch = spec.get_current_epoch(state)
@@ -341,7 +344,7 @@ def get_valid_transfer(state, slot=None, sender_index=None, amount=None, fee=Non
     return transfer
 
 
-def get_attestation_signature(state, attestation_data, privkey, custody_bit=0b0):
+def get_attestation_signature(spec, state, attestation_data, privkey, custody_bit=0b0):
     message_hash = spec.AttestationDataAndCustodyBit(
         data=attestation_data,
         custody_bit=custody_bit,
@@ -369,34 +372,34 @@ def fill_aggregate_attestation(state, attestation):
 
 
 def add_attestation_to_state(state, attestation, slot):
-    block = build_empty_block_for_next_slot(state)
+    block = build_empty_block_for_next_slot(spec, state)
     block.slot = slot
     block.body.attestations.append(attestation)
     spec.state_transition(state, block)
 
 
-def next_slot(state):
+def next_slot(spec, state):
     """
     Transition to the next slot via an empty block.
     Return the empty block that triggered the transition.
     """
-    block = build_empty_block_for_next_slot(state)
+    block = build_empty_block_for_next_slot(spec, state)
     spec.state_transition(state, block)
     return block
 
 
-def next_epoch(state):
+def next_epoch(spec, state):
     """
     Transition to the start slot of the next epoch via an empty block.
     Return the empty block that triggered the transition.
     """
-    block = build_empty_block_for_next_slot(state)
+    block = build_empty_block_for_next_slot(spec, state)
     block.slot += spec.SLOTS_PER_EPOCH - (state.slot % spec.SLOTS_PER_EPOCH)
     spec.state_transition(state, block)
     return block
 
 
-def get_state_root(state, slot) -> bytes:
+def get_state_root(spec, state, slot) -> bytes:
     """
     Return the state root at a recent ``slot``.
     """
