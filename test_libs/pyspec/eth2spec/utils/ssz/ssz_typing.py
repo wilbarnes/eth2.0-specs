@@ -347,12 +347,3 @@ class BytesN(BytesLike):
     @classmethod
     def is_fixed_size(cls):
         return True
-
-
-class Dummy(Container):
-    a: uint8
-    b: uint64
-    c: List[uint64, 123]
-
-
-print(Dummy.is_fixed_size())
