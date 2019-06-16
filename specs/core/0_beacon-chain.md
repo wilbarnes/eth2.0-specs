@@ -162,6 +162,8 @@ These configurations are updated for releases, but may be out of sync during `de
 | - | - |
 | `SHARD_COUNT` | `2**10` (= 1,024) |
 | `TARGET_COMMITTEE_SIZE` | `2**7` (= 128) |
+ // TODO this is the minimum, not the maximum.
+| `MAX_COMMITTEE_SIZE` | `2**7` (= 128) |
 | `MAX_INDICES_PER_ATTESTATION` | `2**12` (= 4,096) |
 | `MIN_PER_EPOCH_CHURN_LIMIT` | `2**2` (= 4) |
 | `CHURN_LIMIT_QUOTIENT` | `2**16` (= 65,536) |
@@ -357,7 +359,7 @@ class IndexedAttestation(Container):
 ```python
 class PendingAttestation(Container):
     # Attester aggregation bitfield
-    aggregation_bitfield: bytes
+    aggregation_bitfield: Bytes[MAX_COMMITTEE_SIZE]
     # Attestation data
     data: AttestationData
     # Inclusion delay
@@ -442,11 +444,11 @@ class AttesterSlashing(Container):
 ```python
 class Attestation(Container):
     # Attester aggregation bitfield
-    aggregation_bitfield: bytes
+    aggregation_bitfield: Bytes[MAX_COMMITTEE_SIZE]
     # Attestation data
     data: AttestationData
     # Custody bitfield
-    custody_bitfield: bytes
+    custody_bitfield: Bytes[MAX_COMMITTEE_SIZE]
     # BLS aggregate signature
     signature: Bytes96
 ```
@@ -502,12 +504,12 @@ class BeaconBlockBody(Container):
     randao_reveal: Bytes96
     eth1_data: Eth1Data
     graffiti: Bytes32
-    proposer_slashings: List[ProposerSlashing]
-    attester_slashings: List[AttesterSlashing]
-    attestations: List[Attestation]
-    deposits: List[Deposit]
-    voluntary_exits: List[VoluntaryExit]
-    transfers: List[Transfer]
+    proposer_slashings: List[ProposerSlashing, MAX_PROPOSER_SLASHINGS]
+    attester_slashings: List[AttesterSlashing, MAX_ATTESTER_SLASHINGS]
+    attestations: List[Attestation, MAX_ATTESTATIONS]
+    deposits: List[Deposit, MAX_DEPOSITS]
+    voluntary_exits: List[VoluntaryExit, MAX_VOLUNTARY_EXITS]
+    transfers: List[Transfer, MAX_TRANSFERS]
 ```
 
 #### `BeaconBlock`
