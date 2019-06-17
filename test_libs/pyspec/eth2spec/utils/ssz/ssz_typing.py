@@ -1,5 +1,12 @@
+<<<<<<< HEAD
 from typing import Tuple, Dict, Iterator
 from types import GeneratorType
+=======
+from types import GeneratorType
+from typing import List, Iterable, TypeVar, Type, NewType
+from typing import Union
+from typing_inspect import get_origin
+>>>>>>> dev
 
 
 class ValueCheckError(Exception):
