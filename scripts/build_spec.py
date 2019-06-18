@@ -20,7 +20,7 @@ from eth2spec.utils.ssz.ssz_impl import (
     signing_root,
 )
 from eth2spec.utils.ssz.ssz_typing import (
-    Bit, Container, List, Vector, Bytes, BytesN, uint64,
+    Bit, Container, List, Vector, Bytes, uint64,
     Bytes4, Bytes32, Bytes48, Bytes96,
 )
 from eth2spec.utils.bls import (
@@ -45,7 +45,7 @@ from eth2spec.utils.ssz.ssz_impl import (
     is_empty,
 )
 from eth2spec.utils.ssz.ssz_typing import (
-    Bit, Container, List, Vector, Bytes, BytesN, uint64,
+    Bit, Container, List, Vector, Bytes, uint64,
     Bytes4, Bytes32, Bytes48, Bytes96,
 )
 from eth2spec.utils.bls import (
