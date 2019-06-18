@@ -400,3 +400,11 @@ class BytesN(BytesLike):
     @classmethod
     def is_fixed_size(cls):
         return True
+
+
+# Helpers for common BytesN types.
+Bytes4 = BytesN[4]
+Bytes32 = BytesN[32]
+Bytes48 = BytesN[48]
+Bytes96 = BytesN[96]
+
