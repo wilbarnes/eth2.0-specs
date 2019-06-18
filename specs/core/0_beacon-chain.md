@@ -372,7 +372,7 @@ class IndexedAttestation(Container):
 
 ```python
 class PendingAttestation(Container):
-    aggregation_bitfield: Bytes[MAX_INDICES_PER_ATTESTATION / 8]
+    aggregation_bitfield: Bytes[MAX_INDICES_PER_ATTESTATION // 8]
     data: AttestationData
     inclusion_delay: Slot
     proposer_index: ValidatorIndex
@@ -439,9 +439,9 @@ class AttesterSlashing(Container):
 
 ```python
 class Attestation(Container):
-    aggregation_bitfield: Bytes[MAX_INDICES_PER_ATTESTATION / 8]
+    aggregation_bitfield: Bytes[MAX_INDICES_PER_ATTESTATION // 8]
     data: AttestationData
-    custody_bitfield: Bytes[MAX_INDICES_PER_ATTESTATION / 8]
+    custody_bitfield: Bytes[MAX_INDICES_PER_ATTESTATION // 8]
     signature: BLSSignature
 ```
 
