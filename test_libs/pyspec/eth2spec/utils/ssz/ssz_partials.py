@@ -1,7 +1,7 @@
 from ..merkle_minimal import hash, next_power_of_two
 
 from .ssz_typing import (
-    Container, List, Vector, Bytes, BytesN, uint, uint64, BasicType, BasicValue, Elements, coerce_type_maybe
+    Container, List, Vector, Bytes, BytesN, uint64, BasicValue, coerce_type_maybe
 )
 from .ssz_impl import (
     chunkify,
@@ -13,12 +13,11 @@ from .ssz_impl import (
     serialize_basic,
 )
 
-
 ZERO_CHUNK = b'\x00' * 32
 
 
 def is_generalized_index_child(c, a):
-    return False if c < a else True if c == a else is_generalized_index_child(c//2, a)
+    return False if c < a else True if c == a else is_generalized_index_child(c // 2, a)
 
 
 def empty_sisters(starting_position, list_size, max_list_size):
@@ -36,7 +35,7 @@ def empty_sisters(starting_position, list_size, max_list_size):
     value = ZERO_CHUNK
     o = {}
     while at < end:
-        while (at+end) % (skip * 2) == 0:
+        while (at + end) % (skip * 2) == 0:
             skip *= 2
             value = hash(value + value)
         o[(starting_position + at) // skip] = value
@@ -174,7 +173,7 @@ def get_generalized_index_correspondence(typ, root=1, path=None):
             )
         }
     o[root] = path
-    if is_list_kind(typ):
+    if issubclass(typ, (List, Bytes)):
         o[root * 2 + 1] = path + ['__len__']
     return o
 
@@ -189,6 +188,7 @@ def get_branch_indices(tree_index):
         o.append((o[-1] // 2) ^ 1)
     return o[:-1]
 
+
 def expand_indices(indices):
     """
     Get the generalized indices of all chunks in the tree needed to prove the chunks with the given
@@ -197,7 +197,7 @@ def expand_indices(indices):
     branches = set()
     for index in indices:
         branches = branches.union(set(get_branch_indices(index) + [index]))
-    return sorted(list([x for x in branches if x*2 not in branches or x*2+1 not in branches]))[::-1]
+    return sorted(list([x for x in branches if x * 2 not in branches or x * 2 + 1 not in branches]))[::-1]
 
 
 def merge(*args):
@@ -286,16 +286,16 @@ class SSZPartial():
                 del self.objects[k]
         if not appending:
             if issubclass(elem_type, BasicValue):
-                self.setter(old_length-1, get_zero_value(elem_type), renew=False)
-            else: 
-                self.clear_subtree(get_generalized_index(self.typ, self.root, [old_length-1]))
+                self.setter(old_length - 1, elem_type.default(), renew=False)
+            else:
+                self.clear_subtree(get_generalized_index(self.typ, self.root, [old_length - 1]))
         else:
-            self.setter(new_length-1, value, renew=False)
+            self.setter(new_length - 1, value, renew=False)
         if new_chunk_count != old_chunk_count:
             for k, v in empty_sisters(start_pos, new_chunk_count, chunk_count(self.typ)).items():
                 self.clear_subtree(k)
                 self.objects[k] = v
-        self.renew_branch(get_generalized_index(self.typ, self.root, [new_length-1]))
+        self.renew_branch(get_generalized_index(self.typ, self.root, [new_length - 1]))
 
     def append(self, value):
         return self.append_or_pop(True, value)
@@ -310,7 +310,8 @@ class SSZPartial():
         gindex = get_generalized_index(self.typ, self.root, path)
         branch_keys = get_branch_indices(gindex)
         item_keys = [k for k in self.objects if is_generalized_index_child(k, gindex)]
-        return ssz_partial(self.typ, {i: self.objects[i] for i in self.objects if i in branch_keys+item_keys}, self.root)
+        return ssz_partial(self.typ, {i: self.objects[i] for i in self.objects if i in branch_keys + item_keys},
+                           self.root)
 
     def __getitem__(self, index):
         return self.getter(index)
@@ -340,7 +341,7 @@ class SSZPartial():
                 return x.full_value() if hasattr(x, 'full_value') else x
 
             return self.typ(**{field: full_value(self.getter(field)) for field in self.typ.get_fields()})
-        elif is_basic_type(self.typ):
+        elif issubclass(self.typ, BasicValue):
             return self.getter(0)
         else:
             raise Exception("Unsupported type: {}".format(self.typ))
@@ -368,11 +369,11 @@ class SSZPartial():
 
     def minimal_indices(self):
         if is_bottom_layer_kind(self.typ) and issubclass(get_elem_type(self.typ, None), BasicValue):
-            if issubclass(self.typ, (List, Bytes)) and self.root*2+1 not in self.objects:
+            if issubclass(self.typ, (List, Bytes)) and self.root * 2 + 1 not in self.objects:
                 return []
             o = list(range(
                 get_generalized_index(self.typ, self.root, [0]),
-                get_generalized_index(self.typ, self.root, [len(self)-1]) + 1
+                get_generalized_index(self.typ, self.root, [len(self) - 1]) + 1
             ))
             return [x for x in o if x in self.objects]
         elif issubclass(self.typ, Container):
@@ -395,7 +396,7 @@ class SSZPartial():
         indices = self.minimal_indices()
         chunks = [self.objects[o] for o in expand_indices(indices)]
         return EncodedPartial(indices=indices, chunks=chunks)
-        
+
 
 def ssz_partial(typ, objects, root=1):
     """
@@ -417,16 +418,17 @@ def ssz_partial(typ, objects, root=1):
     o = Partial(typ, objects, root)
     return o
 
+
 class EncodedPartial(Container):
-    indices: List[uint64, 2**32]
-    chunks: List[BytesN[32], 2**32]
+    indices: List[uint64, 2 ** 32]
+    chunks: List[BytesN[32], 2 ** 32]
 
     def to_ssz(self, typ):
         """
         Convert to an SSZ partial representing the given type.
         """
         expanded_indices = expand_indices(self.indices)
-        o = ssz_partial(typ, fill({e:bytes(c) for e,c in zip(expanded_indices, self.chunks)}))
+        o = ssz_partial(typ, fill({e: bytes(c) for e, c in zip(expanded_indices, self.chunks)}))
         for k, v in o.objects.items():
             if k > 1:
                 assert hash(o.objects[k & -2] + o.objects[k | 1]) == o.objects[k // 2]
