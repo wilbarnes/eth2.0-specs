@@ -223,7 +223,7 @@ These configurations are updated for releases, but may be out of sync during `de
 | `RANDAO_MIXES_LENGTH` | `2**13` (= 8,192) | epochs | ~36 days |
 | `ACTIVE_INDEX_ROOTS_LENGTH` | `2**13` (= 8,192) | epochs | ~36 days |
 | `SLASHED_EXIT_LENGTH` | `2**13` (= 8,192) | epochs | ~36 days |
-| `VALIDATOR_REGISTRY_SIZE` | `2**40 (= 1,099,511,627,776)` | | |
+| `VALIDATOR_REGISTRY_SIZE` | `2**40` (= 1,099,511,627,776) | | |
 
 ### Rewards and penalties
 
@@ -273,7 +273,6 @@ We define the following Python custom types for type hinting and readability:
 | `Gwei` | `uint64` | an amount in Gwei |
 | `BLSPubkey` | `Bytes48` | a BLS12-381 public key |
 | `BLSSignature` | `Bytes96` | a BLS12-381 signature |
-| `CommitteeBitfield` | `Bytes[MAX_INDICES_PER_ATTESTATION]` | Variable size bitfield, with virtual capacity, 1 index per committee member |
 
 ## Containers
 
@@ -356,7 +355,7 @@ class IndexedAttestation(Container):
 
 ```python
 class PendingAttestation(Container):
-    aggregation_bitfield: CommitteeBitfield
+    aggregation_bitfield: Bytes[MAX_INDICES_PER_ATTESTATION / 8]
     data: AttestationData
     inclusion_delay: Slot
     proposer_index: ValidatorIndex
@@ -423,9 +422,9 @@ class AttesterSlashing(Container):
 
 ```python
 class Attestation(Container):
-    aggregation_bitfield: CommitteeBitfield
+    aggregation_bitfield: Bytes[MAX_INDICES_PER_ATTESTATION / 8]
     data: AttestationData
-    custody_bitfield: CommitteeBitfield
+    custody_bitfield: Bytes[MAX_INDICES_PER_ATTESTATION / 8]
     signature: BLSSignature
 ```
 
