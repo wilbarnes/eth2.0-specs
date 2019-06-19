@@ -581,7 +581,7 @@ def bls_domain(domain_type: int, fork_version: bytes=b'\x00\x00\x00\x00') -> int
     """
     Return the bls domain given by the ``domain_type`` and optional 4 byte ``fork_version`` (defaults to zero).
     """
-    return bytes_to_int(int_to_bytes(domain_type, length=4) + fork_version)
+    return bytes_to_int(Bytes4(int_to_bytes(domain_type, length=4)) + fork_version)
 ```
 
 ### `slot_to_epoch`
@@ -649,11 +649,13 @@ def is_slashable_validator(validator: Validator, epoch: Epoch) -> bool:
 ### `get_active_validator_indices`
 
 ```python
-def get_active_validator_indices(state: BeaconState, epoch: Epoch) -> Tuple[ValidatorIndex, ...]:
+def get_active_validator_indices(state: BeaconState, epoch: Epoch) -> List[ValidatorIndex, VALIDATOR_REGISTRY_SIZE]:
     """
     Get active validator indices at ``epoch``.
     """
-    return tuple(ValidatorIndex(i) for i, v in enumerate(state.validators) if is_active_validator(v, epoch))
+    return List[ValidatorIndex, VALIDATOR_REGISTRY_SIZE](
+        i for i, v in enumerate(state.validators) if is_active_validator(v, epoch)
+    )
 ```
 
 ### `increase_balance`
@@ -871,7 +873,7 @@ def compute_committee(indices: Tuple[ValidatorIndex, ...],
 ```python
 def get_crosslink_committee(state: BeaconState, epoch: Epoch, shard: Shard) -> Tuple[ValidatorIndex, ...]:
     return compute_committee(
-        indices=get_active_validator_indices(state, epoch),
+        indices=tuple(get_active_validator_indices(state, epoch)),
         seed=generate_seed(state, epoch),
         index=(shard + SHARD_COUNT - get_epoch_start_shard(state, epoch)) % SHARD_COUNT,
         count=get_epoch_committee_count(state, epoch),
@@ -1615,7 +1617,7 @@ def process_randao(state: BeaconState, body: BeaconBlockBody) -> None:
     # Mix it in
     state.randao_mixes[get_current_epoch(state) % RANDAO_MIXES_LENGTH] = (
         xor(get_randao_mix(state, get_current_epoch(state)),
-            hash(body.randao_reveal))
+            hash(body.randao_reveal.bytes()))
     )
 ```
 
