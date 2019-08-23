@@ -1,4 +1,4 @@
-from typing import Dict, Iterator, Iterable
+from typing import Dict, Iterator, Iterable, NewType
 import copy
 from types import GeneratorType
 
@@ -18,6 +18,10 @@ class SSZValue(object, metaclass=SSZType):
 
     def type(self):
         return self.__class__
+
+
+FieldName = NewType('', str)
+GeneralizedIndex = NewType('GeneralizedIndex', int)
 
 
 class BasicType(SSZType):

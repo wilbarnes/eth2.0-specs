@@ -86,7 +86,15 @@ y_data_root  len(y)
   .......
 ```
 
-We can now define a concept of a "path", a way of describing a function that takes as input an SSZ object and outputs some specific (possibly deeply nested) member. For example, `foo -> foo.x` is a path, as are `foo -> len(foo.y)` and `foo -> foo.y[5].w`. We'll describe paths as lists, which can have two representations. In "human-readable form", they are `["x"]`, `["y", "__len__"]` and `["y", 5, "w"]` respectively. In "encoded form", they are lists of `uint64` values, in these cases (assuming the fields of `foo` in order are `x` then `y`, and `w` is the first field of `y[i]`) `[0]`, `[1, 2**64-1]`, `[1, 5, 0]`. We define `SSZVariableName` as the member variable name string, i.e., a path is presented as a sequence of integers and `SSZVariableName`.
+We can now define a concept of a "path", a way of describing a function that takes as input an SSZ object and outputs some specific (possibly deeply nested) member.
+For example for some type `Foo`, `foo -> foo.x` could be a path, or `foo -> len(foo.y)` or `foo -> foo.y[5].w`.
+
+We'll describe paths with two representations:
+1) In "human-readable form", like a filepath. The examples are `Foo @ x`, `Foo @ y / __len__` and `Foo @ y / 5 / w` respectively.
+2) In "encoded form", they are lists of `uint64` values, in these cases (assuming the fields of `foo` in order are 
+`x` then `y`, and `w` is the first field of `y[i]`) `[0]`, `[1, 2**64-1]`, `[1, 5, 0]`.
+
+We define `FieldName` as the member variable name string, i.e., a path is presented as a sequence of integers and `FieldName`.
 
 ```python
 def item_length(typ: SSZType) -> int:
@@ -101,7 +109,7 @@ def item_length(typ: SSZType) -> int:
 
 ```python
 def get_elem_type(typ: Union[BaseBytes, BaseList, Container],
-                  index_or_variable_name: Union[int, SSZVariableName]) -> SSZType:
+                  index_or_variable_name: Union[int, FieldName]) -> SSZType:
     """
     Return the type of the element of an object of the given type with the given index
     or member variable name (eg. `7` for `x[7]`, `"foo"` for `x.foo`)
@@ -132,7 +140,7 @@ def chunk_count(typ: SSZType) -> int:
 ```
 
 ```python
-def get_item_position(typ: SSZType, index_or_variable_name: Union[int, SSZVariableName]) -> Tuple[int, int, int]:
+def get_item_position(typ: SSZType, index_or_variable_name: Union[int, FieldName]) -> Tuple[int, int, int]:
     """
     Return three variables:
         (i) the index of the chunk in which the given element of the item is represented;
@@ -152,9 +160,9 @@ def get_item_position(typ: SSZType, index_or_variable_name: Union[int, SSZVariab
 ```
 
 ```python
-def get_generalized_index(typ: SSZType, path: Sequence[Union[int, SSZVariableName]]) -> Optional[GeneralizedIndex]:
+def get_generalized_index(typ: SSZType, path: Sequence[Union[int, FieldName]]) -> Optional[GeneralizedIndex]:
     """
-    Converts a path (eg. `[7, "foo", 3]` for `x[7].foo[3]`, `[12, "bar", "__len__"]` for
+    Converts a path (eg. `7 / foo / 3` for `x[7].foo[3]`, `12 / bar / __len__` for
     `len(x[12].bar)`) into the generalized index representing its position in the Merkle tree.
     """
     root = GeneralizedIndex(1)
