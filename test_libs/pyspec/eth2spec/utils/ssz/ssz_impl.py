@@ -1,7 +1,8 @@
 from ..merkle_minimal import merkleize_chunks
 from ..hash_function import hash
 from .ssz_typing import (
-    SSZValue, SSZType, BasicValue, BasicType, Series, Elements, Bits, boolean, Container, List, Bytes,
+    SSZValue, SSZType, BasicValue, BasicType, ComplexValue,
+    ElementsType, BitElementsType, Bits, boolean, Container, List, ByteList,
     Bitlist, Bitvector, uint,
 )
 
@@ -23,16 +24,6 @@ def serialize_basic(value: SSZValue):
         raise Exception(f"Type not supported: {type(value)}")
 
 
-def deserialize_basic(value, typ: BasicType):
-    if issubclass(typ, uint):
-        return typ(int.from_bytes(value, 'little'))
-    elif issubclass(typ, boolean):
-        assert value in (b'\x00', b'\x01')
-        return typ(value == b'\x01')
-    else:
-        raise Exception(f"Type not supported: {typ}")
-
-
 def is_zero(obj: SSZValue):
     return type(obj).default() == obj
 
@@ -49,13 +40,13 @@ def serialize(obj: SSZValue):
         else:
             as_bytearray[len(obj) // 8] |= 1 << (len(obj) % 8)
         return bytes(as_bytearray)
-    elif isinstance(obj, Series):
+    elif isinstance(obj, ComplexValue):
         return encode_series(obj)
     else:
         raise Exception(f"Type not supported: {type(obj)}")
 
 
-def encode_series(values: Series):
+def encode_series(values: ComplexValue):
     if isinstance(values, bytes):  # Bytes and BytesN are already like serialized output
         return values
 
@@ -92,7 +83,7 @@ def encode_series(values: Series):
 # -----------------------------
 
 
-def pack(values: Series):
+def pack(values: ComplexValue):
     if isinstance(values, bytes):  # Bytes and BytesN are already packed
         return values
     elif isinstance(values, Bits):
@@ -115,7 +106,7 @@ def mix_in_length(root, length):
 def is_bottom_layer_kind(typ: SSZType):
     return (
         isinstance(typ, BasicType) or
-        (issubclass(typ, Elements) and isinstance(typ.elem_type, BasicType))
+        (isinstance(typ, ElementsType) and isinstance(typ.elem_type, BasicType))
     )
 
 
@@ -127,13 +118,12 @@ def item_length(typ: SSZType) -> int:
 
 
 def chunk_count(typ: SSZType) -> int:
-    # note that for lists, .length *on the type* describes the list limit.
     if isinstance(typ, BasicType):
         return 1
-    elif issubclass(typ, Bits):
-        return (typ.length + 255) // 256
-    elif issubclass(typ, Elements):
-        return (typ.length * item_length(typ.elem_type) + 31) // 32
+    elif isinstance(typ, BitElementsType):
+        return (typ.max_elements() + 255) // 256
+    elif isinstance(typ, ElementsType):
+        return (typ.max_elements() * item_length(typ.elem_type) + 31) // 32
     elif issubclass(typ, Container):
         return len(typ.get_fields())
     else:
@@ -141,7 +131,7 @@ def chunk_count(typ: SSZType) -> int:
 
 
 def hash_tree_root(obj: SSZValue):
-    if isinstance(obj, Series):
+    if isinstance(obj, ComplexValue):
         if is_bottom_layer_kind(obj.type()):
             leaves = chunkify(pack(obj))
         else:
@@ -151,7 +141,7 @@ def hash_tree_root(obj: SSZValue):
     else:
         raise Exception(f"Type not supported: {type(obj)}")
 
-    if isinstance(obj, (List, Bytes, Bitlist)):
+    if isinstance(obj, (List, ByteList, Bitlist)):
         return mix_in_length(merkleize_chunks(leaves, limit=chunk_count(obj.type())), len(obj))
     else:
         return merkleize_chunks(leaves)

@@ -115,7 +115,7 @@ def coerce_type_maybe(v, typ: SSZType, strict: bool = False):
             return typ(v)
     elif isinstance(v, (list, tuple)):
         return typ(*v)
-    elif isinstance(v, (bytes, BytesN, Bytes)):
+    elif isinstance(v, (bytes, ByteVector, ByteList)):
         return typ(v)
     elif isinstance(v, GeneratorType):
         return typ(v)
@@ -126,15 +126,22 @@ def coerce_type_maybe(v, typ: SSZType, strict: bool = False):
     return v
 
 
-class Series(SSZValue):
+class ComplexType(SSZType):
+    pass
+
+
+class ComplexValue(SSZValue, metaclass=ComplexType):
 
     def __iter__(self) -> Iterator[SSZValue]:
+        raise Exception("Not implemented")
+
+    def __len__(self):
         raise Exception("Not implemented")
 
 
 # Note: importing ssz functionality locally, to avoid import loop
 
-class Container(Series, metaclass=SSZType):
+class Container(ComplexValue, metaclass=SSZType):
 
     def __init__(self, **kwargs):
         cls = self.__class__
@@ -160,7 +167,7 @@ class Container(Series, metaclass=SSZType):
         from .ssz_impl import signing_root
         return signing_root(self)
 
-    def __setattr__(self, name, value):
+    def set_field(self, name, value):
         if name not in self.__class__.__annotations__:
             raise AttributeError("Cannot change non-existing SSZ-container attribute")
         field_typ = self.__class__.__annotations__[name]
@@ -168,6 +175,11 @@ class Container(Series, metaclass=SSZType):
         if not isinstance(value, field_typ):
             raise ValueError(f"Cannot set field of {self.__class__}:"
                              f" field: {name} type: {field_typ} value: {value} value type: {type(value)}")
+        super().__setattr__(name, value)
+
+    def __setattr__(self, name, value):
+        if not name.startswith('_') and not isinstance(value, property):
+            self.set_field(name, value)
         super().__setattr__(name, value)
 
     def __repr__(self):
@@ -196,10 +208,17 @@ class Container(Series, metaclass=SSZType):
         return dict(cls.__annotations__)
 
     @classmethod
-    def get_field_names(cls) -> Iterable[SSZType]:
+    def get_field_names(cls) -> Iterable[str]:
+        return cls.get_fields().keys()
+
+    @classmethod
+    def field_count(cls) -> int:
         if not hasattr(cls, '__annotations__'):  # no container fields
-            return ()
-        return list(cls.__annotations__.keys())
+            return 0
+        return len(cls.__annotations__)
+
+    def __len__(self):
+        return self.__class__.field_count()
 
     @classmethod
     def default(cls):
@@ -213,7 +232,7 @@ class Container(Series, metaclass=SSZType):
         return iter([getattr(self, field) for field in self.get_fields().keys()])
 
 
-class ParamsBase(Series):
+class ParamsBase(object):
     _has_params = False
 
     def __new__(cls, *args, **kwargs):
@@ -282,16 +301,21 @@ class ParamsMeta(SSZType):
         return self.__subclasscheck__(obj.__class__)
 
 
-class ElementsType(ParamsMeta):
+class ElementsType(ParamsMeta, ComplexType):
     elem_type: SSZType
-    length: int
+
+    def max_elements(cls) -> int:
+        raise Exception("Override this")
 
 
 class Elements(ParamsBase, metaclass=ElementsType):
-    pass
+
+    @classmethod
+    def can_grow(cls) -> bool:
+        raise Exception("Implemented by subclasses as class-method")
 
 
-class BaseList(list, Elements):
+class TypedElementsBase(list, ComplexValue, ParamsBase, metaclass=ElementsType):
 
     def __init__(self, *args):
         items = self.extract_args(*args)
@@ -302,7 +326,7 @@ class BaseList(list, Elements):
 
     @classmethod
     def value_check(cls, value):
-        return all(isinstance(v, cls.elem_type) for v in value) and len(value) <= cls.length
+        return all(isinstance(v, cls.elem_type) for v in value) and len(value) <= cls.max_elements()
 
     @classmethod
     def extract_args(cls, *args):
@@ -314,11 +338,11 @@ class BaseList(list, Elements):
 
     def __str__(self):
         cls = self.__class__
-        return f"{cls.__name__}[{cls.elem_type.__name__}, {cls.length}]({', '.join(str(v) for v in self)})"
+        return f"{cls.__name__}[{cls.elem_type.__name__}, {cls.max_elements()}]({', '.join(str(v) for v in self)})"
 
     def __repr__(self):
         cls = self.__class__
-        return f"{cls.__name__}[{cls.elem_type.__name__}, {cls.length}]({', '.join(str(v) for v in self)})"
+        return f"{cls.__name__}[{cls.elem_type.__name__}, {cls.max_elements()}]({', '.join(str(v) for v in self)})"
 
     def __getitem__(self, k) -> SSZValue:
         if isinstance(k, int):  # check if we are just doing a lookup, and not slicing
@@ -344,22 +368,23 @@ class BaseList(list, Elements):
             super().__setitem__(k, coerce_type_maybe(v, self.__class__.elem_type, strict=True))
 
     def append(self, v):
+        if len(self) >= self.__class__.max_elements():
+            raise ValueError(f"Cannot append element to Elements of length {len(self)} that reached its limit")
         super().append(coerce_type_maybe(v, self.__class__.elem_type, strict=True))
 
     def __iter__(self) -> Iterator[SSZValue]:
         return super().__iter__()
 
     def last(self):
-        # be explicit about getting the last item, for the non-python readers, and negative-index safety
+        # be explict about getting the last item, for the non-python readers, and negative-index safety
         return self[len(self) - 1]
 
 
 class BitElementsType(ElementsType):
-    elem_type: SSZType = boolean
-    length: int
+    elem_type: SSZType = bit
 
 
-class Bits(BaseList, metaclass=BitElementsType):
+class Bits(TypedElementsBase, metaclass=BitElementsType):
 
     def as_bytes(self):
         as_bytearray = [0] * ((len(self) + 7) // 8)
@@ -368,7 +393,15 @@ class Bits(BaseList, metaclass=BitElementsType):
         return bytes(as_bytearray)
 
 
-class Bitlist(Bits):
+class BitlistType(BitElementsType):
+    elem_type: SSZType = bit
+    limit: int
+
+    def max_elements(cls) -> int:
+        return cls.limit
+
+
+class Bitlist(Bits, metaclass=BitlistType):
     @classmethod
     def is_fixed_size(cls):
         return False
@@ -377,8 +410,20 @@ class Bitlist(Bits):
     def default(cls):
         return cls()
 
+    @classmethod
+    def can_grow(cls) -> bool:
+        return True
 
-class Bitvector(Bits):
+
+class BitvectorType(BitElementsType, metaclass=BitlistType):
+    elem_type: SSZType = bit
+    length: int
+
+    def max_elements(cls) -> int:
+        return cls.length
+
+
+class Bitvector(Bits, metaclass=BitvectorType):
 
     @classmethod
     def extract_args(cls, *args):
@@ -400,8 +445,20 @@ class Bitvector(Bits):
     def default(cls):
         return cls(0 for _ in range(cls.length))
 
+    @classmethod
+    def can_grow(cls) -> bool:
+        return False
 
-class List(BaseList):
+
+class ListType(ElementsType):
+    elem_type: SSZType
+    limit: int
+
+    def max_elements(cls) -> int:
+        return cls.limit
+
+
+class List(TypedElementsBase, metaclass=ListType):
 
     @classmethod
     def default(cls):
@@ -411,8 +468,20 @@ class List(BaseList):
     def is_fixed_size(cls):
         return False
 
+    @classmethod
+    def can_grow(cls) -> bool:
+        return True
 
-class Vector(BaseList):
+
+class VectorType(ElementsType):
+    elem_type: SSZType
+    length: int
+
+    def max_elements(cls) -> int:
+        return cls.length
+
+
+class Vector(TypedElementsBase, metaclass=VectorType):
 
     @classmethod
     def value_check(cls, value):
@@ -426,6 +495,10 @@ class Vector(BaseList):
     @classmethod
     def is_fixed_size(cls):
         return cls.elem_type.is_fixed_size()
+
+    @classmethod
+    def can_grow(cls) -> bool:
+        return False
 
     def append(self, v):
         # Deep-copy and other utils like to change the internals during work.
@@ -441,12 +514,11 @@ class Vector(BaseList):
 
 class BytesType(ElementsType):
     elem_type: SSZType = byte
-    length: int
 
 
-class BaseBytes(bytes, Elements, metaclass=BytesType):
+class ByteElementsBase(bytes, ComplexValue, metaclass=BytesType):
 
-    def __new__(cls, *args) -> "BaseBytes":
+    def __new__(cls, *args) -> "ByteElementsBase":
         extracted_val = cls.extract_args(*args)
         if not cls.value_check(extracted_val):
             raise ValueError(f"Bad input for class {cls}: {extracted_val}")
@@ -465,14 +537,22 @@ class BaseBytes(bytes, Elements, metaclass=BytesType):
     @classmethod
     def value_check(cls, value):
         # check type and virtual length limit
-        return isinstance(value, bytes) and len(value) <= cls.length
+        return isinstance(value, bytes) and len(value) <= cls.max_elements()
 
     def __str__(self):
         cls = self.__class__
-        return f"{cls.__name__}[{cls.length}]: {self.hex()}"
+        return f"{cls.__name__}[{cls.max_elements()}]: {self.hex()}"
 
 
-class Bytes(BaseBytes):
+class ByteListType(BytesType):
+    elem_type: SSZType = byte
+    limit: int
+
+    def max_elements(cls) -> int:
+        return cls.limit
+
+
+class ByteList(ByteElementsBase, metaclass=ByteListType):
 
     @classmethod
     def default(cls):
@@ -482,8 +562,20 @@ class Bytes(BaseBytes):
     def is_fixed_size(cls):
         return False
 
+    @classmethod
+    def can_grow(cls) -> bool:
+        return True
 
-class BytesN(BaseBytes):
+
+class ByteVectorType(BytesType):
+    elem_type: SSZType = byte
+    length: int
+
+    def max_elements(cls) -> int:
+        return cls.length
+
+
+class ByteVector(ByteElementsBase, metaclass=ByteVectorType):
 
     @classmethod
     def extract_args(cls, *args):
@@ -505,11 +597,15 @@ class BytesN(BaseBytes):
     def is_fixed_size(cls):
         return True
 
+    @classmethod
+    def can_grow(cls) -> bool:
+        return False
+
 
 # Helpers for common BytesN types
-Bytes1: BytesType = BytesN[1]
-Bytes4: BytesType = BytesN[4]
-Bytes8: BytesType = BytesN[8]
-Bytes32: BytesType = BytesN[32]
-Bytes48: BytesType = BytesN[48]
-Bytes96: BytesType = BytesN[96]
+Bytes1: ByteVector = ByteVector[1]
+Bytes4: ByteVector = ByteVector[4]
+Bytes8: ByteVector = ByteVector[8]
+Bytes32: ByteVector = ByteVector[32]
+Bytes48: ByteVector = ByteVector[48]
+Bytes96: ByteVector = ByteVector[96]
